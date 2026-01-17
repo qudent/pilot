@@ -1,4 +1,4 @@
-"""Gemini Flash for fast command translation."""
+"""Gemini Flash for command translation and display generation."""
 import json
 import base64
 from google import genai
@@ -7,59 +7,65 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
-SYSTEM_PROMPT = """You control a dev server via tmux. Respond in JSON only.
+SYSTEM_PROMPT = """You control a dev server. Given user input and tmux screen contents, do TWO things:
 
-Input: user command (voice/text), current server state, context
-Output: JSON with:
-- "summary": 1-line status for user (what you're doing/found)
-- "commands": list of {"target": "session:window", "keys": "command to run"} or []
-- "task": updated task description if changed, else null
-- "note": short log entry for activity log
+1. ACTIONS: Return commands to execute (or empty if just viewing)
+2. DISPLAY: Generate a plain text status update for the user's screen
 
-Be fast and concise. Common patterns:
-- "check X" → look at relevant tmux pane, summarize
-- "run X" → send command to appropriate session
-- "status" → summarize all sessions
-- "start X" → create session if needed, run command
+The display should:
+- Fit the user's screen (cols/rows given)
+- Summarize what's happening across tmux sessions
+- Be concise, terminal-style, no fluff
+- Include relevant output snippets if useful
 
-Respond ONLY with valid JSON, no markdown."""
+Respond with JSON:
+{
+  "commands": [{"target": "session:window", "keys": "command"}],
+  "display": "plain text status to show user",
+  "task": "current task description or null",
+  "note": "short activity log entry"
+}
+
+Keep display text sized for the screen dimensions provided."""
 
 
 async def translate(
     text: str = None,
     audio_b64: str = None,
     image_b64: str = None,
-    state: dict = None,
+    screen: dict = None,
+    tmux_screens: dict = None,
     context: str = None,
     gps: dict = None,
 ) -> dict:
-    """Translate multimodal input to commands."""
+    """Translate input to commands and generate display."""
     if not client:
         return {
-            "summary": "Error: GEMINI_API_KEY not set",
             "commands": [],
+            "display": "Error: GEMINI_API_KEY not set",
             "task": None,
             "note": "missing API key"
         }
 
-    # Build content parts
-    parts = []
+    # Build prompt
+    screen = screen or {"cols": 80, "rows": 24}
+    prompt = f"Screen: {screen['cols']}x{screen['rows']} chars\n\n"
 
-    # Add context
-    user_msg = f"Server state:\n```json\n{json.dumps(state, indent=2)}\n```\n\n"
+    if tmux_screens:
+        prompt += "=== TMUX SESSIONS ===\n"
+        for name, content in tmux_screens.items():
+            prompt += f"\n[{name}]\n{content}\n"
+        prompt += "\n"
+
     if context:
-        user_msg += f"Context:\n{context[:1000]}\n\n"
+        prompt += f"=== CONTEXT ===\n{context[:500]}\n\n"
+
     if gps:
-        user_msg += f"Location: {gps}\n\n"
+        prompt += f"Location: {gps['lat']:.4f}, {gps['lon']:.4f}\n\n"
 
-    user_msg += "User command: "
+    prompt += f"User: {text or '(voice/image input)'}"
 
-    if text:
-        user_msg += text
-    else:
-        user_msg += "(see audio/image)"
-
-    parts.append(types.Part.from_text(user_msg))
+    parts = [types.Part.from_text(text=prompt)]
 
     # Add audio if present
     if audio_b64:
@@ -81,32 +87,30 @@ async def translate(
             contents=[types.Content(role="user", parts=parts)],
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
-                temperature=0.1,  # Low for consistency
-                max_output_tokens=500,  # Keep responses short
+                temperature=0.1,
+                max_output_tokens=1000,
             )
         )
 
-        # Parse JSON response
         text_response = response.text.strip()
-        # Handle markdown code blocks
+        # Strip markdown code blocks
         if text_response.startswith("```"):
-            text_response = text_response.split("```")[1]
-            if text_response.startswith("json"):
-                text_response = text_response[4:]
+            lines = text_response.split('\n')
+            text_response = '\n'.join(lines[1:-1] if lines[-1] == '```' else lines[1:])
 
         return json.loads(text_response)
 
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         return {
-            "summary": f"Parse error: {response.text[:100]}",
             "commands": [],
+            "display": response.text[:500] if response else "Parse error",
             "task": None,
-            "note": f"JSON parse failed: {e}"
+            "note": "json parse failed"
         }
     except Exception as e:
         return {
-            "summary": f"Error: {str(e)[:50]}",
             "commands": [],
+            "display": f"Error: {str(e)[:100]}",
             "task": None,
-            "note": f"gemini error: {e}"
+            "note": f"error: {e}"
         }

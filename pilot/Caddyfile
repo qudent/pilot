@@ -1,4 +1,18 @@
-# Replace with your domain or IP.sslip.io
-46-224-212-39.sslip.io {
+# Caddy config for Pilot
+# Replace YOUR_DOMAIN with your actual domain, or use IP with self-signed cert
+
+# Option 1: With domain (automatic HTTPS via Let's Encrypt)
+# pilot.yourdomain.com {
+#     reverse_proxy localhost:7777
+# }
+
+# Option 2: IP address with self-signed cert (for direct IP access)
+:443 {
+    tls internal
     reverse_proxy localhost:7777
 }
+
+# Option 3: Local testing (HTTP only)
+# :8080 {
+#     reverse_proxy localhost:7777
+# }
