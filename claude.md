@@ -55,8 +55,8 @@ sudo systemctl restart pilot  # Restart
 
 ### Access
 
-- **URL**: https://46.224.212.39 (self-signed cert, accept warning)
-- **IPv6**: `2a01:4f8:1c1a:3385::1`
+- **URL**: https://46-224-212-39.sslip.io (valid Let's Encrypt cert)
+- **IP**: `46.224.212.39` / `2a01:4f8:1c1a:3385::1`
 - **Token**: `cat ~/.pilot/token`
 - Enter token in web client, stored in localStorage
 
