@@ -1,5 +1,7 @@
 # Claude Code Instructions
 
+**Dotfiles repo**: https://github.com/qudent/post-ui-dotfiles (private)
+
 ## Package Managers
 
 - **JavaScript/Node**: Use `pnpm`, not npm
