@@ -76,3 +76,15 @@ sudo systemctl restart pilot  # Restart
 export GEMINI_API_KEY=...      # For pilot
 export ANTHROPIC_API_KEY=...   # For agents
 ```
+
+### Skills
+
+**parallel-worktrees** - `~/.claude/skills/parallel-worktrees/`
+```bash
+source ~/.claude/skills/parallel-worktrees/worktrees.sh && worktree_create feature-x
+```
+
+### Repos
+
+All repos cloned to `~/repos/` (15 total from qudent account).
+`~/dotfiles` → symlink to `~/repos/pilot`
