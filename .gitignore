@@ -1,0 +1,18 @@
+# Secrets
+.env
+*.key
+*.pem
+credentials*
+secrets*
+*_secret*
+*_token*
+
+# Browser profile (contains cookies/sessions)
+.browser-profile/
+
+# Local overrides
+*.local
+
+# OS
+.DS_Store
+Thumbs.db

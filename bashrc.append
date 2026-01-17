@@ -1,0 +1,20 @@
+# === Post-UI Agent Server PATH ===
+
+# Custom scripts
+export PATH="$HOME/bin:$PATH"
+
+# UV and local binaries
+export PATH="$HOME/.local/bin:$PATH"
+
+# NPM global packages
+export PATH="$HOME/.npm-global/bin:$PATH"
+
+# Source UV environment if available
+[ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
+
+# pnpm
+export PNPM_HOME="$HOME/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
