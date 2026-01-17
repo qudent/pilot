@@ -1,6 +1,6 @@
 # Claude Code Instructions
 
-**Dotfiles repo**: https://github.com/qudent/post-ui-dotfiles (private)
+**Dotfiles repo**: https://github.com/qudent/pilot
 
 ## Package Managers
 
