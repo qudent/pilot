@@ -9,50 +9,69 @@
 
 ## About This File
 
-This file (claude.md) should contain rough context about what we've been working on. Update it when the project direction changes or significant progress is made.
+This file should contain rough context about current work. Update when direction changes.
 
 ---
 
-## Current Context
+## Current Project: Pilot
 
-### Project: Post-UI Agent Server
+Voice/text control for the dev server. Architecture:
 
-Setting up this Hetzner server as a voice-controlled development machine. The vision:
+```
+Phone → HTTPS → Caddy → WebSocket → Pilot → Gemini Flash → tmux/agents
+                                      ↓
+                              ~/.pilot/context.md (rolling)
+```
 
-1. **Voice input** from smartphone/other surfaces
-2. **Gemini Flash** translates voice commands/drawings/pictures into commands
-3. **tmux** sessions receive and execute commands
-4. **Heavy-hitting Claude instances** do the actual coding work
-5. **Browser automation** enables agents to research (flights, docs, etc.)
+### Services
 
-### What's Installed
+| Service | Port | Status |
+|---------|------|--------|
+| Pilot | 7777 (internal) | `systemctl status pilot` |
+| Caddy | 443 (HTTPS) | `systemctl status caddy` |
 
-| Tool | Command | Purpose |
-|------|---------|---------|
-| Claude Code | `claude` | Main coding agent |
-| aider | `aider` | AI pair programming |
-| Codex CLI | `codex` | OpenAI's coding agent |
-| Open Interpreter | `interpreter` | Natural language → code |
-| Playwright | `playwright` | Browser automation |
-| browser-use | `browser-use` | LLM-controlled browsing |
-| uv | `uv` | Fast Python package manager |
-| pnpm | `pnpm` | Fast Node package manager |
+### Key Files
 
-### Configuration Done
+```
+~/pilot/
+  server.py      # WebSocket server
+  gemini.py      # Multimodal command translation
+  tmux.py        # tmux control
+  context.py     # Rolling context management
+  static/        # Web client
 
-- `~/.bashrc` - PATH includes `~/bin`, `~/.local/bin`, `~/.local/share/pnpm`, `~/.npm-global/bin`
-- `~/.tmux.conf` - Agent-friendly config (C-a prefix, mouse, 50k scrollback)
-- `~/.browser-profile/` - Persistent browser profile (cookies, localStorage, logins)
-- GitHub authenticated as `qudent`
+~/.pilot/
+  token          # Auth token (generated once)
+  context.md     # Live rolling context
+```
 
-### Browser Scripts
+### Commands
 
-- `browser` - Launch persistent Chromium (maintains login sessions)
-- `browse "task"` - Run browser-use agent with persistent profile
+```bash
+pilot token      # Show auth token
+pilot status     # Check if running
+sudo systemctl restart pilot  # Restart
+```
 
-The browser uses `~/.browser-profile/` to persist cookies and logins across sessions - not ephemeral like test browsers.
+### Access
 
-### Next Steps
+- **URL**: https://YOUR_SERVER_IP (self-signed cert, accept warning)
+- **Token**: `cat ~/.pilot/token`
+- Enter token in web client, stored in localStorage
 
-- Set up voice → Gemini → tmux command pipeline
-- Configure API keys (ANTHROPIC_API_KEY, etc.)
+### Installed Tools
+
+| Tool | Command |
+|------|---------|
+| aider | `aider` |
+| codex | `codex` |
+| interpreter | `interpreter` |
+| browser-use | `browser-use` |
+| playwright | `playwright` |
+
+### Required API Keys
+
+```bash
+export GEMINI_API_KEY=...      # For pilot
+export ANTHROPIC_API_KEY=...   # For agents
+```

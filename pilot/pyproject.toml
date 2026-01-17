@@ -1,0 +1,14 @@
+[project]
+name = "pilot"
+version = "0.1.0"
+description = "Voice/text control for dev server"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "websockets>=14.0",
+    "google-genai>=1.0.0",
+]
+
+[project.scripts]
+pilot-server = "server:main"

@@ -1,47 +1,49 @@
 #!/bin/bash
 set -e
 
-echo "Installing Post-UI Agent Server dotfiles..."
+echo "Installing Post-UI Dev Server..."
 
 # Create directories
-mkdir -p ~/bin ~/.browser-profile ~/Downloads
+mkdir -p ~/.pilot/logs ~/Downloads
 
-# Copy scripts
-cp bin/* ~/bin/
-chmod +x ~/bin/*
+# Install pilot
+cp -r pilot ~/pilot
+cd ~/pilot
+~/.local/bin/uv sync
 
-# Copy tmux config
+# Install systemd services
+sudo cp pilot.service /etc/systemd/system/
+sudo cp Caddyfile /etc/caddy/Caddyfile
+sudo systemctl daemon-reload
+sudo systemctl enable pilot caddy
+sudo systemctl restart caddy
+
+# Copy configs
 cp tmux.conf ~/.tmux.conf
-
-# Copy claude.md
 cp claude.md ~/claude.md
 
 # Append to bashrc if not already present
-if ! grep -q "Post-UI Agent Server" ~/.bashrc 2>/dev/null; then
+if ! grep -q "Post-UI" ~/.bashrc 2>/dev/null; then
     echo "" >> ~/.bashrc
     cat bashrc.append >> ~/.bashrc
     echo "Added PATH exports to ~/.bashrc"
-else
-    echo "PATH exports already in ~/.bashrc"
 fi
 
+# Generate token if not exists
+if [ ! -f ~/.pilot/token ]; then
+    python3 -c "import secrets; print(secrets.token_urlsafe(32))" > ~/.pilot/token
+    chmod 600 ~/.pilot/token
+fi
+
+# Start pilot
+sudo systemctl start pilot
+
 echo ""
-echo "Done! Now install the tools:"
+echo "Done!"
 echo ""
-echo "  # Python package manager"
-echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+echo "Access: https://$(hostname -I | awk '{print $1}')"
+echo "Token:  $(cat ~/.pilot/token)"
 echo ""
-echo "  # Node package manager"
-echo "  npm i -g pnpm && pnpm setup"
-echo ""
-echo "  # Agents"
-echo "  uv tool install aider-chat"
-echo "  uv tool install browser-use --with langchain-anthropic"
-echo "  uv tool install playwright && playwright install chromium --with-deps"
-echo "  uv tool install open-interpreter"
-echo "  pnpm add -g @openai/codex"
-echo ""
-echo "  # GitHub CLI auth"
-echo "  gh auth login"
-echo ""
-echo "Reload shell: source ~/.bashrc"
+echo "Set your API keys:"
+echo "  export GEMINI_API_KEY=..."
+echo "  export ANTHROPIC_API_KEY=..."

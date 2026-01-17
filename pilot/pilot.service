@@ -1,0 +1,15 @@
+[Unit]
+Description=Pilot - Voice control for dev server
+After=network.target
+
+[Service]
+Type=simple
+User=name
+WorkingDirectory=/home/name/pilot
+Environment="PATH=/home/name/.local/bin:/usr/bin"
+ExecStart=/home/name/.local/bin/uv run python server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

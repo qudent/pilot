@@ -4,15 +4,17 @@
 *.pem
 credentials*
 secrets*
-*_secret*
-*_token*
+token
 
-# Browser profile (contains cookies/sessions)
+# Python
+__pycache__/
+*.pyc
+.venv/
+uv.lock
+
+# Runtime
+.pilot/
 .browser-profile/
-
-# Local overrides
-*.local
 
 # OS
 .DS_Store
-Thumbs.db
