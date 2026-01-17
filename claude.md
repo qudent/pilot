@@ -55,7 +55,8 @@ sudo systemctl restart pilot  # Restart
 
 ### Access
 
-- **URL**: https://YOUR_SERVER_IP (self-signed cert, accept warning)
+- **URL**: https://46.224.212.39 (self-signed cert, accept warning)
+- **IPv6**: `2a01:4f8:1c1a:3385::1`
 - **Token**: `cat ~/.pilot/token`
 - Enter token in web client, stored in localStorage
 
