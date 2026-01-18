@@ -46,6 +46,15 @@
     }
     #mic.recording { background: #300; color: #f00; }
     .error { color: #f44; }
+    .processing { color: #888; }
+    .previous { opacity: 0.5; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .processing-indicator {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
   </style>
 </head>
 <body>
@@ -70,6 +79,18 @@ let ws = null;
 let token = localStorage.getItem('pilot_token');
 let mediaRecorder = null;
 let chunks = [];
+let cachedGps = null;
+
+// Background GPS updater - caches position for non-blocking use
+function updateGps() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      p => { cachedGps = { lat: p.coords.latitude, lon: p.coords.longitude }; },
+      () => {},
+      { timeout: 5000, maximumAge: 60000 }
+    );
+  }
+}
 
 function getScreenInfo() {
   return {
@@ -120,15 +141,20 @@ function send(text, audio) {
   const msg = { type: 'cmd', screen: getScreenInfo() };
   if (text) msg.text = text;
   if (audio) msg.audio = audio;
-  // GPS if available
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      p => { msg.gps = { lat: p.coords.latitude, lon: p.coords.longitude }; },
-      () => {}, { timeout: 1000 }
-    );
-  }
+  // Use cached GPS (non-blocking)
+  if (cachedGps) msg.gps = cachedGps;
   ws.send(JSON.stringify(msg));
-  output.textContent = '...';
+
+  // Show processing feedback with previous content dimmed
+  const previousContent = output.textContent;
+  const displayText = text || '(voice command)';
+  output.innerHTML = `<span class="previous">${escapeHtml(previousContent)}</span>\n<span class="processing processing-indicator">\u2192 ${escapeHtml(displayText)}</span>`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 // Text input
@@ -174,6 +200,10 @@ tokenInput.onkeydown = (e) => {
     connect();
   }
 };
+
+// Start GPS caching on load and refresh every minute
+updateGps();
+setInterval(updateGps, 60000);
 
 // Start
 if (token) connect();
