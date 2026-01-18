@@ -22,6 +22,33 @@ class TestConfig:
         assert config.AUTH_TOKEN
         assert len(config.AUTH_TOKEN) > 20
 
+    def test_load_user_instructions_no_file(self):
+        """When prompt.md doesn't exist, returns None."""
+        import config
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".md") as f:
+            temp_path = Path(f.name)
+        try:
+            with patch.object(config, "PROMPT_FILE", temp_path):
+                temp_path.unlink()  # Ensure doesn't exist
+                result = config.load_user_instructions()
+                assert result is None
+        finally:
+            if temp_path.exists():
+                temp_path.unlink()
+
+    def test_load_user_instructions_with_file(self):
+        """When prompt.md exists, returns its contents."""
+        import config
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".md", mode="w") as f:
+            f.write("Custom instructions here")
+            temp_path = Path(f.name)
+        try:
+            with patch.object(config, "PROMPT_FILE", temp_path):
+                result = config.load_user_instructions()
+                assert result == "Custom instructions here"
+        finally:
+            temp_path.unlink()
+
 
 class TestTmux:
     """Test tmux module."""
@@ -105,6 +132,79 @@ class TestContext:
 class TestGemini:
     """Test gemini module."""
 
+    def test_pydantic_models_valid(self):
+        """Test that PilotResponse and TmuxCommand models work correctly."""
+        import gemini
+
+        # Test TmuxCommand
+        cmd = gemini.TmuxCommand(target="main:0", keys="ls -la")
+        assert cmd.target == "main:0"
+        assert cmd.keys == "ls -la"
+
+        # Test TmuxCommand with defaults
+        cmd_default = gemini.TmuxCommand()
+        assert cmd_default.target == ""
+        assert cmd_default.keys == ""
+
+        # Test PilotResponse
+        response = gemini.PilotResponse(
+            commands=[gemini.TmuxCommand(target="main:0", keys="ls")],
+            display="Status display",
+            task="current task",
+            note="log entry"
+        )
+        assert len(response.commands) == 1
+        assert response.display == "Status display"
+        assert response.task == "current task"
+        assert response.note == "log entry"
+
+        # Test PilotResponse with minimal required fields
+        response_minimal = gemini.PilotResponse(display="Just display")
+        assert response_minimal.commands == []
+        assert response_minimal.task is None
+        assert response_minimal.note is None
+
+    def test_pydantic_model_json_parsing(self):
+        """Test that PilotResponse can parse JSON correctly."""
+        import gemini
+
+        json_str = json.dumps({
+            "commands": [{"target": "main:0", "keys": "ls"}],
+            "display": "Listing files",
+            "task": "file listing",
+            "note": "ran ls"
+        })
+
+        response = gemini.PilotResponse.model_validate_json(json_str)
+        assert response.display == "Listing files"
+        assert len(response.commands) == 1
+        assert response.commands[0].target == "main:0"
+        assert response.commands[0].keys == "ls"
+
+        # Test model_dump returns dict
+        result_dict = response.model_dump()
+        assert isinstance(result_dict, dict)
+        assert result_dict["display"] == "Listing files"
+        assert result_dict["commands"][0]["keys"] == "ls"
+
+    def test_get_system_prompt_default(self):
+        """Test get_system_prompt uses default when no custom file."""
+        import gemini
+        with patch.object(gemini, "load_user_instructions", return_value=None):
+            prompt = gemini.get_system_prompt()
+            assert gemini.CORE_SCHEMA_INSTRUCTION in prompt
+            assert gemini.DEFAULT_USER_INSTRUCTIONS in prompt
+
+    def test_get_system_prompt_custom(self):
+        """Test get_system_prompt uses custom instructions when available."""
+        import gemini
+        custom = "My custom instructions"
+        with patch.object(gemini, "load_user_instructions", return_value=custom):
+            prompt = gemini.get_system_prompt()
+            assert gemini.CORE_SCHEMA_INSTRUCTION in prompt
+            assert custom in prompt
+            assert gemini.DEFAULT_USER_INSTRUCTIONS not in prompt
+
     @pytest.mark.asyncio
     async def test_translate_no_api_key(self):
         import gemini
@@ -115,6 +215,7 @@ class TestGemini:
 
     @pytest.mark.asyncio
     async def test_translate_success(self):
+        """Test successful translation with structured output."""
         import gemini
         mock_response = MagicMock()
         mock_response.text = json.dumps({
@@ -135,9 +236,37 @@ class TestGemini:
             assert result["display"] == "Listing files"
             assert len(result["commands"]) == 1
             assert result["commands"][0]["keys"] == "ls"
+            assert result["commands"][0]["target"] == "main:0"
+            assert result["task"] == "file listing"
+            assert result["note"] == "ran ls"
 
     @pytest.mark.asyncio
-    async def test_translate_json_parse_error(self):
+    async def test_translate_structured_output_config(self):
+        """Test that translate() uses response_schema in config."""
+        import gemini
+        mock_response = MagicMock()
+        mock_response.text = json.dumps({
+            "commands": [],
+            "display": "Status",
+            "task": None,
+            "note": None
+        })
+
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        with patch.object(gemini, "client", mock_client):
+            await gemini.translate(text="status")
+
+            # Verify generate_content was called with correct config
+            call_args = mock_client.aio.models.generate_content.call_args
+            config = call_args.kwargs.get("config") or call_args[1].get("config")
+            assert config.response_mime_type == "application/json"
+            assert config.response_schema == gemini.PilotResponse
+
+    @pytest.mark.asyncio
+    async def test_translate_pydantic_validation_error(self):
+        """Test that validation errors are handled gracefully."""
         import gemini
         mock_response = MagicMock()
         mock_response.text = "not valid json"
@@ -147,8 +276,10 @@ class TestGemini:
 
         with patch.object(gemini, "client", mock_client):
             result = await gemini.translate(text="hello")
+            # Should return error response, not crash
+            assert "commands" in result
+            assert result["commands"] == []
             assert "note" in result
-            assert "parse" in result["note"].lower() or result["display"]
 
 
 class TestServer:
