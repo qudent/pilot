@@ -6,8 +6,9 @@ echo "Installing Post-UI Dev Server..."
 # Create directories
 mkdir -p ~/.pilot/logs ~/Downloads
 
-# Install pilot
-cp -r pilot ~/pilot
+# Install pilot (symlink to repo, keeping single source of truth)
+rm -rf ~/pilot 2>/dev/null || true
+ln -sfn "$(pwd)/pilot" ~/pilot
 cd ~/pilot
 ~/.local/bin/uv sync
 

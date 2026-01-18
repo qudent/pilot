@@ -21,13 +21,15 @@ cd post-ui-dotfiles
 ## Structure
 
 ```
-pilot/           # Main server
+pilot/           # Main server (symlinked to ~/pilot at runtime)
   server.py      # WebSocket endpoint
   gemini.py      # Multimodal translation
   tmux.py        # tmux control
   context.py     # Rolling context
   static/        # Web client
+  .venv/         # Python venv (gitignored, created by uv sync)
 
+install.sh       # Creates ~/pilot symlink and installs services
 tmux.conf        # Agent-friendly tmux config
 bashrc.append    # PATH exports
 claude.md        # Context for Claude Code sessions
@@ -41,6 +43,7 @@ claude.md        # Context for Claude Code sessions
    - "check the build"
    - "run tests"
    - "show what's in the main pane"
+
 
 ## Required
 
