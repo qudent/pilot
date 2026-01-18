@@ -1,9 +1,12 @@
 """Gemini Flash for command translation and display generation."""
 import json
 import base64
+import logging
 from google import genai
 from google.genai import types
 from config import GEMINI_API_KEY, GEMINI_MODEL
+
+logger = logging.getLogger("pilot.gemini")
 
 client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
@@ -82,6 +85,7 @@ async def translate(
         ))
 
     try:
+        logger.debug(f"Prompt length: {len(prompt)} chars")
         response = await client.aio.models.generate_content(
             model=GEMINI_MODEL,
             contents=[types.Content(role="user", parts=parts)],
@@ -93,14 +97,20 @@ async def translate(
         )
 
         text_response = response.text.strip()
+        logger.debug(f"Response length: {len(text_response)} chars")
+
         # Strip markdown code blocks
         if text_response.startswith("```"):
             lines = text_response.split('\n')
             text_response = '\n'.join(lines[1:-1] if lines[-1] == '```' else lines[1:])
 
-        return json.loads(text_response)
+        result = json.loads(text_response)
+        logger.debug(f"Parsed: {len(result.get('commands', []))} commands")
+        return result
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.warning(f"JSON parse failed: {e}")
+        logger.debug(f"Raw response: {response.text[:200] if response else 'None'}")
         return {
             "commands": [],
             "display": response.text[:500] if response else "Parse error",
@@ -108,6 +118,7 @@ async def translate(
             "note": "json parse failed"
         }
     except Exception as e:
+        logger.error(f"Gemini error: {e}", exc_info=True)
         return {
             "commands": [],
             "display": f"Error: {str(e)[:100]}",

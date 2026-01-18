@@ -10,6 +10,7 @@ import config
 import tmux
 import context
 import gemini
+from logging_config import logger
 
 app = FastAPI(title="Pilot")
 
@@ -37,26 +38,37 @@ async def get_token():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
+    client = websocket.client.host if websocket.client else "unknown"
+
     if not token or not verify_token(token):
+        logger.warning(f"Auth failed from {client}")
         await websocket.close(code=4001, reason="Invalid token")
         return
 
     await websocket.accept()
+    logger.info(f"Client connected: {client}")
 
     try:
         while True:
             data = await websocket.receive_json()
+            msg_type = data.get("type", "unknown")
 
-            if data.get("type") == "ping":
+            if msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
                 continue
 
-            if data.get("type") == "cmd":
+            if msg_type == "cmd":
+                text = data.get("text", "(no text)")
+                logger.debug(f"Command: {text[:100]}")
+
                 # Get full tmux screen contents
                 screens = tmux.get_all_screens(lines=100)
+                logger.debug(f"Tmux sessions: {list(screens.keys())}")
+
                 ctx = context.load()
 
                 # Translate with Gemini
+                logger.debug("Calling Gemini...")
                 result = await gemini.translate(
                     text=data.get("text"),
                     audio_b64=data.get("audio"),
@@ -66,6 +78,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                     context=ctx,
                     gps=data.get("gps"),
                 )
+                logger.debug(f"Gemini result: commands={len(result.get('commands', []))}")
 
                 # Send display immediately
                 await websocket.send_json({
@@ -80,6 +93,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                     if keys:
                         session = target.split(":")[0] if target else None
                         window = target.split(":")[1] if ":" in target else None
+                        logger.info(f"Exec: {keys[:50]} -> {target or 'default'}")
                         tmux.send_keys(keys, session=session, window=window)
 
                 # Update context
@@ -89,12 +103,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
                 )
 
     except WebSocketDisconnect:
-        pass
+        logger.info(f"Client disconnected: {client}")
     except Exception as e:
+        logger.error(f"Error: {e}", exc_info=True)
         await websocket.send_json({"type": "error", "message": str(e)})
 
 
 if __name__ == "__main__":
     import uvicorn
-    print(f"Pilot on {config.HOST}:{config.PORT}")
-    uvicorn.run(app, host=config.HOST, port=config.PORT)
+    logger.info(f"Pilot starting on {config.HOST}:{config.PORT}")
+    uvicorn.run(app, host=config.HOST, port=config.PORT, log_level="warning")
