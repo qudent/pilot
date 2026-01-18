@@ -18,6 +18,7 @@ else:
 
 # Files
 CONTEXT_FILE = PILOT_HOME / "context.md"
+PROMPT_FILE = PILOT_HOME / "prompt.md"
 
 # Server
 HOST = "127.0.0.1"  # Caddy will proxy
@@ -29,3 +30,14 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 # Context limits (lines)
 CONTEXT_MAX_LINES = 60
+
+
+def load_user_instructions() -> str:
+    """Load user-defined instructions from ~/.pilot/prompt.md if it exists.
+
+    Returns the file contents if the file exists, otherwise returns None
+    which signals to use default instructions.
+    """
+    if PROMPT_FILE.exists():
+        return PROMPT_FILE.read_text().strip()
+    return None
