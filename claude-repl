@@ -1,0 +1,84 @@
+#!/bin/bash
+# claude-repl - Simple REPL interface for Claude Code without the TUI
+# Usage: claude-repl [options to pass to claude]
+
+set -e
+
+# Create a FIFO for sending messages to claude
+FIFO=$(mktemp -u)
+mkfifo "$FIFO"
+trap "rm -f '$FIFO'" EXIT
+
+# Start claude in streaming JSON mode in the background
+claude -p --input-format stream-json --output-format stream-json --verbose --dangerously-skip-permissions "$@" < "$FIFO" 2>&1 | while IFS= read -r line; do
+    # Parse the JSON and extract just the text response
+    type=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
+
+    case "$type" in
+        system)
+            subtype=$(echo "$line" | jq -r '.subtype // empty')
+            if [ "$subtype" = "init" ]; then
+                model=$(echo "$line" | jq -r '.model // "unknown"')
+                session=$(echo "$line" | jq -r '.session_id // empty')
+                echo -e "\033[90m[Session: $session | Model: $model]\033[0m"
+            fi
+            ;;
+        assistant)
+            # Extract text content from the message
+            text=$(echo "$line" | jq -r '.message.content[]? | select(.type=="text") | .text // empty' 2>/dev/null)
+            if [ -n "$text" ]; then
+                echo -e "\033[36m$text\033[0m"
+            fi
+            ;;
+        result)
+            # Show cost info
+            cost=$(echo "$line" | jq -r '.total_cost_usd // 0')
+            echo -e "\033[90m[\$${cost}]\033[0m"
+            echo ""
+            ;;
+    esac
+done &
+CLAUDE_PID=$!
+
+# Keep the FIFO open for writing
+exec 3>"$FIFO"
+
+# Give claude a moment to start
+sleep 1
+
+echo "Claude REPL ready. Type your messages, press Enter to send. Ctrl+C to exit."
+echo ""
+
+# Read user input and send to claude
+while true; do
+    echo -n "> "
+    if ! IFS= read -r input; then
+        break
+    fi
+
+    # Skip empty input
+    [ -z "$input" ] && continue
+
+    # Special commands
+    case "$input" in
+        /quit|/exit|/q)
+            echo "Goodbye!"
+            break
+            ;;
+        /help)
+            echo "Commands: /quit, /exit, /q - exit the REPL"
+            echo "          /help - show this help"
+            continue
+            ;;
+    esac
+
+    # Escape the input for JSON
+    escaped=$(printf '%s' "$input" | jq -Rs '.')
+
+    # Send to claude
+    echo "{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":$escaped}}" >&3
+done
+
+# Cleanup
+exec 3>&-
+wait $CLAUDE_PID 2>/dev/null || true
